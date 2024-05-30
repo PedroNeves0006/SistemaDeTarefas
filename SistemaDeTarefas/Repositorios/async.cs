@@ -1,6 +1,6 @@
 ﻿namespace SistemaDeTarefas.Repositorios
 {
-    public class ascync
+    public class async
     {
     }
 }

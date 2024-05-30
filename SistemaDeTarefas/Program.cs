@@ -1,5 +1,8 @@
 
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Refit;
 using SistemaDeTarefas.Data;
 using SistemaDeTarefas.Integracao;
@@ -7,13 +10,17 @@ using SistemaDeTarefas.Integracao.Interfaces;
 using SistemaDeTarefas.Integracao.Refit;
 using SistemaDeTarefas.Repositorios;
 using SistemaDeTarefas.Repositorios.Interfaces;
+using System.Text;
 
 namespace SistemaDeTarefas
 {
     public class Program
     {
+       
         public static void Main(string[] args)
         {
+            string chaveSecreta = "75bd23b9-4183-4d5a-9201-ebfe38a8577d";
+
             var builder = WebApplication.CreateBuilder(args);
             builder.Services.AddDbContext<SistemaTarefasDBContex>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DataBase") ?? throw new InvalidOperationException("Connection string 'DB_SistemaTarefas' not found.")));
@@ -22,12 +29,35 @@ namespace SistemaDeTarefas
             builder.Services.AddControllers();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen(); 
+            builder.Services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Sistema de Tarefas - API", Version = "v1" });
+                var securitySchema = new OpenApiSecurityScheme
+                {
+                    Name = "JWT Autentificação",
+                    Description = "Entre com o JWT Bearer token",
+                    In = ParameterLocation.Header,
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    Reference = new OpenApiReference
+                    {
+                        Id = JwtBearerDefaults.AuthenticationScheme,
+                        Type = ReferenceType.SecurityScheme
+                    }
+                };
 
-          //  builder.Services.AddEntityFrameworkSqlServer()
-          // .AddDbContext<SistemaTarefasDBContex>(
-          //  options => options.UseSqlServer(builder.Configuration.GetConnectionString("DataBase"))
-          // );
+                c.AddSecurityDefinition(JwtBearerDefaults.AuthenticationScheme, securitySchema);
+                c.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
+                    { securitySchema, new string [] {} }
+                });
+            });
+
+            //  builder.Services.AddEntityFrameworkSqlServer()
+            // .AddDbContext<SistemaTarefasDBContex>(
+            //  options => options.UseSqlServer(builder.Configuration.GetConnectionString("DataBase"))
+            // );
 
             builder.Services.AddScoped<IUsuarioRepositorio, UsuarioRepositorio>();
             builder.Services.AddScoped<ITarefaRepositorio, TarefaRepositorio>();
@@ -36,6 +66,24 @@ namespace SistemaDeTarefas
             builder.Services.AddRefitClient<IViaCepIntegracaoRefit>().ConfigureHttpClient(c =>
             {
                 c.BaseAddress = new Uri("https://viacep.com.br");
+            });
+
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            }).AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters()
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = "sua_empresa",
+                    ValidAudience = "sua_aplicacao",
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(chaveSecreta))
+                };
             });
 
 
@@ -50,6 +98,7 @@ namespace SistemaDeTarefas
 
             app.UseHttpsRedirection();
 
+            app.UseAuthentication();
             app.UseAuthorization();
 
 
